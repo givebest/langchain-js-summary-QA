@@ -16,6 +16,8 @@ const { Title, Paragraph } = Typography;
 const openAIApiKey = import.meta.env.VITE_OPENAI_API_KEY;
 let vectorStoreData: MemoryVectorStore;
 
+console.log("openAIApiKey", openAIApiKey);
+
 const model = new OpenAI({
   openAIApiKey,
   temperature: 0.5,
