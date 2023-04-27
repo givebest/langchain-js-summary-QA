@@ -1,6 +1,6 @@
-# langchain js summary & QA
+# langchain.js summary & QA
 
-## langchain js for long text summary and Q&A.
+## Langchain.js for long text summary and Q&A.
 
 ## Run
 
