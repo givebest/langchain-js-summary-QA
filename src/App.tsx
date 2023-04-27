@@ -9,7 +9,7 @@ import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { OpenAIEmbeddings } from "langchain/embeddings/openai";
 import { TokenTextSplitter } from "langchain/text_splitter";
 import { RetrievalQAChain, loadQARefineChain } from "langchain/chains";
-import { textShort, qaPrompt } from "./utils";
+import { text, textShort, qaPrompt } from "./utils";
 import "./App.css";
 
 const { Title, Paragraph } = Typography;
@@ -21,7 +21,7 @@ console.log("openAIApiKey", openAIApiKey);
 const model = new OpenAI({
   openAIApiKey,
   temperature: 0.5,
-  modelName: "gpt-3.5-turbo",
+  // modelName: "gpt-3.5-turbo",
   // streaming: true,
 });
 
@@ -40,7 +40,7 @@ function App() {
 
     console.log("qaPrompt", qaPrompt);
 
-    const docs = await textSplitter.createDocuments([textShort]);
+    const docs = await textSplitter.createDocuments([text]);
     const vectorStore = await MemoryVectorStore.fromDocuments(
       docs,
       new OpenAIEmbeddings({
@@ -90,12 +90,12 @@ function App() {
     setLoading(true);
     const lang = "zh-hans";
     const textSplitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 4000,
+      chunkSize: 1700,
     });
-    const docs = await textSplitter.createDocuments([textShort]);
+    const docs = await textSplitter.createDocuments([text]);
 
     const prompt = new PromptTemplate({
-      template: `Summarize this in "${lang}" language:
+      template: `Summarize this content into a bulleted list of the most important information and write in "${lang}" language:
         "{text}"
         CONCISE SUMMARY:`,
       inputVariables: ["text"],

@@ -5,6 +5,6 @@
 ## Run
 
 1. Creating `.env` files.
-2. Enter `VITE_OPENAI_API_KE=sn-*`
+2. Enter `VITE_OPENAI_API_KEY=sn-*`
 3. `pnpm i`
 4. `pnpm dev`
