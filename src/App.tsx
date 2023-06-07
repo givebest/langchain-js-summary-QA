@@ -1,5 +1,6 @@
 import { useCallback, useState, useEffect } from "react";
 import { Typography, Spin, Divider, Button, Space } from "antd";
+import ReactMarkdown from "react-markdown";
 import { OpenAI } from "langchain/llms/openai";
 import { loadSummarizationChain } from "langchain/chains";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
@@ -9,20 +10,49 @@ import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { OpenAIEmbeddings } from "langchain/embeddings/openai";
 import { TokenTextSplitter } from "langchain/text_splitter";
 import { RetrievalQAChain, loadQARefineChain } from "langchain/chains";
-import { text, textShort, qaPrompt } from "./utils";
+import {
+  text,
+  textShort,
+  qaPrompt,
+  textCn,
+  textEn,
+  mergePrompt,
+} from "./utils";
 import "./App.css";
 
 const { Title, Paragraph } = Typography;
 const openAIApiKey = import.meta.env.VITE_OPENAI_API_KEY;
 let vectorStoreData: MemoryVectorStore;
 
+let answerList: string[] = [];
+
 console.log("openAIApiKey", openAIApiKey);
 
 const model = new OpenAI({
   openAIApiKey,
-  temperature: 0.5,
+  temperature: 0,
+  maxTokens: 800,
   // modelName: "gpt-3.5-turbo",
   // streaming: true,
+
+  callbacks: [
+    {
+      async handleLLMNewToken(token: string) {
+        console.log("token", String(token));
+      },
+      async handleLLMError(error: string) {
+        console.log("error", error);
+      },
+      handleLLMEnd(res) {
+        const text =
+          res?.generations &&
+          res?.generations[0] &&
+          res?.generations[0][0]?.text;
+        console.log("end", text);
+        answerList.push(text);
+      },
+    },
+  ],
 });
 
 function App() {
@@ -40,7 +70,7 @@ function App() {
 
     console.log("qaPrompt", qaPrompt);
 
-    const docs = await textSplitter.createDocuments([text]);
+    const docs = await textSplitter.createDocuments([textShort]);
     const vectorStore = await MemoryVectorStore.fromDocuments(
       docs,
       new OpenAIEmbeddings({
@@ -90,21 +120,24 @@ function App() {
     setLoading(true);
     const lang = "zh-hans";
     const textSplitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 1700,
+      chunkSize: 1000,
     });
-    const docs = await textSplitter.createDocuments([text]);
+    const docs = await textSplitter.createDocuments([textCn]);
 
     const prompt = new PromptTemplate({
-      template: `Summarize this content into a bulleted list of the most important information and write in "${lang}" language:
-        "{text}"
-        CONCISE SUMMARY:`,
+      template: `Summarize the highlights of the content and output a useful summary in a few sentences:
+---
+"{text}"
+---
+HIGHTLIGHTS SUMMARY:`,
       inputVariables: ["text"],
     });
 
     const chain = loadSummarizationChain(model, {
-      prompt,
+      type: "map_reduce",
+      // prompt,
       combineMapPrompt: prompt,
-      combinePrompt: prompt,
+      // combinePrompt: prompt,
     });
 
     const res = await chain.call({
@@ -112,9 +145,42 @@ function App() {
       max_tokens: 800,
     });
 
+    // setLoading(false);
+
+    // const content = res.text || res.choices[0].text;
+    // console.log("summary content", content, answerList);
+
+    const response = await fetch(`https://api.openai.com/v1/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${openAIApiKey}`,
+      },
+      body: JSON.stringify({
+        temperature: 0,
+        max_tokens: 800,
+        ...{
+          model: "text-davinci-003",
+          prompt: mergePrompt({
+            content: answerList.join(""),
+            lang: "zh-hans",
+          }),
+        },
+      }),
+    });
+
+    const resMerge = await response.json();
+
     setLoading(false);
+    const answer =
+      resMerge?.text ||
+      resMerge?.output_text ||
+      (resMerge?.choices && resMerge?.choices[0]?.text);
+    console.log("answer", answer);
+
     setTitle("Summary");
-    setSummary(res.text || res.choices[0].text);
+    setSummary(answer);
+    answerList = [];
   }, []);
 
   useEffect(() => {
@@ -144,7 +210,9 @@ function App() {
       <Typography>
         <Spin spinning={loading} />
         <Title>{title}</Title>
-        <Paragraph>{summary}</Paragraph>
+        <Paragraph className="summary">
+          <ReactMarkdown children={summary} />
+        </Paragraph>
       </Typography>
     </>
   );
