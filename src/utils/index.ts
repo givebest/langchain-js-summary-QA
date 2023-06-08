@@ -705,14 +705,20 @@ Helpful Answer:`
 export const mergePrompt = ({
   content,
   lang,
+  prompt,
 }: {
   content: string;
   lang: string;
+  prompt?: string;
 }) => {
   return `---
 ${content}
 ---
-Use the above to remove duplicates and merge them into one paragraph.
+${
+  prompt
+    ? prompt
+    : "Using the above, remove duplicates and then merge to summarise the key points."
+}
 Reply in easy to read markdown format.
 Write in "${lang}" language.`;
 };

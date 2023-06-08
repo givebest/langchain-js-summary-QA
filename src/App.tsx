@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from "react";
-import { Typography, Spin, Divider, Button, Space } from "antd";
+import { Typography, Spin, Divider, Button, Space, Input } from "antd";
 import ReactMarkdown from "react-markdown";
 import { OpenAI } from "langchain/llms/openai";
 import { loadSummarizationChain } from "langchain/chains";
@@ -21,18 +21,20 @@ import {
 import "./App.css";
 
 const { Title, Paragraph } = Typography;
+const { TextArea } = Input;
 const openAIApiKey = import.meta.env.VITE_OPENAI_API_KEY;
 let vectorStoreData: MemoryVectorStore;
 
 let answerList: string[] = [];
 
-console.log("openAIApiKey", openAIApiKey);
+// console.log("openAIApiKey", openAIApiKey);
 
 const model = new OpenAI({
   openAIApiKey,
   temperature: 0,
   maxTokens: 800,
-  // modelName: "gpt-3.5-turbo",
+  // modelName: "text-embedding-ada-002",
+  modelName: "text-davinci-002",
   // streaming: true,
 
   callbacks: [
@@ -59,6 +61,55 @@ function App() {
   const [summary, setSummary] = useState("");
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState("");
+
+  const onChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setCustomPrompt(e.target.value);
+  }, []);
+
+  const getMergeAnswer = useCallback(async () => {
+    const response = await fetch(`https://api.openai.com/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${openAIApiKey}`,
+      },
+      body: JSON.stringify({
+        temperature: 0,
+        max_tokens: 800,
+        ...{
+          // model: "text-davinci-003",
+          model: "gpt-3.5-turbo",
+          stream: false,
+          messages: [
+            {
+              content: mergePrompt({
+                content: answerList.join(""),
+                lang: "zh-hans",
+                prompt: customPrompt,
+              }),
+              role: "user",
+            },
+          ],
+        },
+      }),
+    });
+
+    const res = await response.json();
+
+    setLoading(false);
+    const answer =
+      res?.text ||
+      res?.output_text ||
+      (res?.choices &&
+        (res?.choices[0]?.text || res?.choices[0]?.message?.content));
+
+    console.log("answer", answer);
+
+    setTitle("Summary");
+    setSummary(answer);
+    answerList = [];
+  }, []);
 
   const onQA = useCallback(async () => {
     setLoading(true);
@@ -118,29 +169,56 @@ function App() {
 
   const onSummary = useCallback(async () => {
     setLoading(true);
-    const lang = "zh-hans";
+    //     const lang = "zh-hans";
+    //     const prompt = new PromptTemplate({
+    //       template: `Summarize the highlights of the content and output a useful summary in a few sentences:
+    // ---
+    // "{text}"
+    // ---
+    // HIGHTLIGHTS SUMMARY:`,
+    //       inputVariables: ["text"],
+    //     });
+
+    if (vectorStoreData) {
+      const chain = new RetrievalQAChain({
+        combineDocumentsChain: loadSummarizationChain(model, {
+          type: "map_reduce",
+          // prompt,
+          // combineMapPrompt: prompt,
+          // combinePrompt: prompt,
+        }),
+        retriever: vectorStoreData?.asRetriever(),
+      });
+
+      await chain.call({
+        query: customPrompt,
+      });
+
+      await getMergeAnswer;
+      return;
+    }
+
     const textSplitter = new RecursiveCharacterTextSplitter({
       chunkSize: 1000,
     });
-    const docs = await textSplitter.createDocuments([textCn]);
+    const docs = await textSplitter.createDocuments([textShort]);
+    const vectorStore = await MemoryVectorStore.fromDocuments(
+      docs,
+      new OpenAIEmbeddings({
+        openAIApiKey: openAIApiKey,
+      })
+    );
 
-    const prompt = new PromptTemplate({
-      template: `Summarize the highlights of the content and output a useful summary in a few sentences:
----
-"{text}"
----
-HIGHTLIGHTS SUMMARY:`,
-      inputVariables: ["text"],
-    });
+    vectorStoreData = vectorStore;
 
     const chain = loadSummarizationChain(model, {
       type: "map_reduce",
       // prompt,
-      combineMapPrompt: prompt,
+      // combineMapPrompt: prompt,
       // combinePrompt: prompt,
     });
 
-    const res = await chain.call({
+    await chain.call({
       input_documents: docs,
       max_tokens: 800,
     });
@@ -150,38 +228,8 @@ HIGHTLIGHTS SUMMARY:`,
     // const content = res.text || res.choices[0].text;
     // console.log("summary content", content, answerList);
 
-    const response = await fetch(`https://api.openai.com/v1/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${openAIApiKey}`,
-      },
-      body: JSON.stringify({
-        temperature: 0,
-        max_tokens: 800,
-        ...{
-          model: "text-davinci-003",
-          prompt: mergePrompt({
-            content: answerList.join(""),
-            lang: "zh-hans",
-          }),
-        },
-      }),
-    });
-
-    const resMerge = await response.json();
-
-    setLoading(false);
-    const answer =
-      resMerge?.text ||
-      resMerge?.output_text ||
-      (resMerge?.choices && resMerge?.choices[0]?.text);
-    console.log("answer", answer);
-
-    setTitle("Summary");
-    setSummary(answer);
-    answerList = [];
-  }, []);
+    getMergeAnswer();
+  }, [getMergeAnswer]);
 
   useEffect(() => {
     if (loading) {
@@ -192,6 +240,13 @@ HIGHTLIGHTS SUMMARY:`,
 
   return (
     <>
+      <TextArea
+        rows={4}
+        onChange={onChange}
+        value={customPrompt}
+        placeholder="prompt"
+      />
+      <Divider />
       <Space wrap>
         <Button type="primary" onClick={onSummary}>
           Summary
