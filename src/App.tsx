@@ -169,23 +169,23 @@ function App() {
 
   const onSummary = useCallback(async () => {
     setLoading(true);
-    //     const lang = "zh-hans";
-    //     const prompt = new PromptTemplate({
-    //       template: `Summarize the highlights of the content and output a useful summary in a few sentences:
-    // ---
-    // "{text}"
-    // ---
-    // HIGHTLIGHTS SUMMARY:`,
-    //       inputVariables: ["text"],
-    //     });
+    const lang = "zh-hans";
+    const prompt = new PromptTemplate({
+      template: `Write a concise summary of the following in the language of the original text:
+    ---
+    "{text}"
+    ---
+   CONCISE SUMMARY:`,
+      inputVariables: ["text"],
+    });
 
     if (vectorStoreData) {
       const chain = new RetrievalQAChain({
         combineDocumentsChain: loadSummarizationChain(model, {
           type: "map_reduce",
-          // prompt,
-          // combineMapPrompt: prompt,
-          // combinePrompt: prompt,
+          prompt,
+          combineMapPrompt: prompt,
+          combinePrompt: prompt,
         }),
         retriever: vectorStoreData?.asRetriever(),
       });
@@ -201,7 +201,7 @@ function App() {
     const textSplitter = new RecursiveCharacterTextSplitter({
       chunkSize: 1000,
     });
-    const docs = await textSplitter.createDocuments([textShort]);
+    const docs = await textSplitter.createDocuments([textCn]);
     const vectorStore = await MemoryVectorStore.fromDocuments(
       docs,
       new OpenAIEmbeddings({
@@ -213,9 +213,9 @@ function App() {
 
     const chain = loadSummarizationChain(model, {
       type: "map_reduce",
-      // prompt,
-      // combineMapPrompt: prompt,
-      // combinePrompt: prompt,
+      prompt,
+      combineMapPrompt: prompt,
+      combinePrompt: prompt,
     });
 
     await chain.call({

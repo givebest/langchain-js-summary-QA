@@ -717,8 +717,8 @@ ${content}
 ${
   prompt
     ? prompt
-    : "Using the above, remove duplicates and then merge to summarise the key points."
+    : `Remove duplicates from the following to ensure that the information is complete, then combine and summarise them into one paragraph. and summarize this content into a bulleted list of the most important information.`
 }
-Reply in easy to read markdown format.
+
 Write in "${lang}" language.`;
 };
